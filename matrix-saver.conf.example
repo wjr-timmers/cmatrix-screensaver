@@ -1,0 +1,28 @@
+# matrix-saver settings.  Copy to ~/.config/matrix-saver/config and edit.
+# This file is read by /bin/sh, so use NAME="value" with no spaces around =.
+# Any setting can also be overridden with an environment variable of the
+# same name prefixed with MATRIX_ (e.g. MATRIX_SPEED=3).
+
+# Font and size.  Katakana needs a font with Japanese glyphs
+# (Debian/Ubuntu: fonts-noto-cjk).  Missing font -> falls back to ASCII.
+FONT="Noto Sans Mono CJK JP"
+FONT_SIZE=11
+
+# Colours.
+BG="#1E1E1E"            # background
+COLOR_DIM="#26A269"     # trail
+COLOR_BRIGHT="#2DBE6C"  # bold trail glyphs
+COLOR_HEAD="#FFFFFF"    # leading glyph of each stream
+
+# japanese | ascii
+CHARSET=japanese
+
+# 0 (fast) .. 10 (slow)
+SPEED=6
+
+# yes (some bold glyphs) | no | all
+BOLD=yes
+
+# Extra cmatrix flags, e.g. "-a" (async scroll), "-k" (glyphs mutate),
+# "-r" (rainbow).  See `cmatrix -h`.
+CMATRIX_ARGS=""

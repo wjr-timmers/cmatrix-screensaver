@@ -1,0 +1,204 @@
+#!/bin/sh
+# matrix-saver: cmatrix as an XScreenSaver hack.
+#
+# XScreenSaver hands us a window (via $XSCREENSAVER_WINDOW or -window-id);
+# we embed an xterm in it and run cmatrix inside.  The xterm resizes itself
+# to cover the window exactly, so any font, DPI or monitor size works.
+#
+#   matrix-saver                    run as a hack (xscreensaver does this)
+#   matrix-saver -window            preview in a normal window
+#   matrix-saver -fullscreen        preview fullscreen (any key / close to quit)
+#   matrix-saver -window-id ID      draw into an existing X window
+#   matrix-saver --tty              run in the current terminal
+#
+# Options (override the config file and environment):
+#   -speed N        0 (fast) .. 10 (slow)         -font NAME    -font-size N
+#   -ascii          ASCII instead of katakana     -bold yes|no|all
+#
+# Settings: ~/.config/matrix-saver/config (see matrix-saver.conf.example).
+# Every setting can also be given as an environment variable.
+#
+# SPDX-License-Identifier: MIT
+
+VERSION=0.1.0
+
+die() { echo "matrix-saver: $*" >&2; exit 1; }
+
+# --- settings ---------------------------------------------------------------
+# Command-line options win over MATRIX_* environment variables, those over
+# the config file, the config file
+# over the defaults below.
+CONFIG=${MATRIX_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/matrix-saver/config}
+# shellcheck disable=SC1090
+[ -r "$CONFIG" ] && . "$CONFIG"
+
+FONT=${MATRIX_FONT:-${FONT:-Noto Sans Mono CJK JP}}
+FONT_SIZE=${MATRIX_FONT_SIZE:-${FONT_SIZE:-11}}
+BG=${MATRIX_BG:-${BG:-#1E1E1E}}
+COLOR_DIM=${MATRIX_COLOR_DIM:-${COLOR_DIM:-#26A269}}           # trail
+COLOR_BRIGHT=${MATRIX_COLOR_BRIGHT:-${COLOR_BRIGHT:-#2DBE6C}}  # bold trail
+COLOR_HEAD=${MATRIX_COLOR_HEAD:-${COLOR_HEAD:-#FFFFFF}}        # leading glyph
+CHARSET=${MATRIX_CHARSET:-${CHARSET:-japanese}}  # japanese | ascii
+SPEED=${MATRIX_SPEED:-${SPEED:-6}}               # 0 (fast) .. 10 (slow)
+BOLD=${MATRIX_BOLD:-${BOLD:-yes}}                # yes | no | all
+CMATRIX_ARGS=${MATRIX_CMATRIX_ARGS-${CMATRIX_ARGS-}}  # extra, e.g. "-a -k"
+NL='
+'
+
+# Hand the effective settings down to the copy of us running inside xterm.
+export_settings() {
+  export MATRIX_FONT="$FONT" MATRIX_FONT_SIZE="$FONT_SIZE" \
+    MATRIX_CHARSET="$CHARSET" MATRIX_SPEED="$SPEED" MATRIX_BOLD="$BOLD" \
+    MATRIX_CMATRIX_ARGS="$CMATRIX_ARGS"
+}
+
+# Prints the cmatrix command line, one word per line.
+cmatrix_cmd() {
+  IFS=' '
+  set -- cmatrix -u "$SPEED"
+  case $CHARSET in
+    japanese) set -- "$@" -c ;;
+    ascii) ;;
+    *) die "CHARSET must be 'japanese' or 'ascii', not '$CHARSET'" ;;
+  esac
+  case $BOLD in
+    yes) set -- "$@" -b ;;
+    all) set -- "$@" -B ;;
+    no)  set -- "$@" -n ;;
+    *) die "BOLD must be yes, no or all, not '$BOLD'" ;;
+  esac
+  # shellcheck disable=SC2086  # CMATRIX_ARGS is meant to word-split
+  printf '%s\n' "$@" $CMATRIX_ARGS
+}
+
+# --- inside the xterm -------------------------------------------------------
+# Ask xterm for its cell size (CSI 16 t -> CSI 6;h;w t), resize it to cover
+# $MATRIX_TARGET_W x $MATRIX_TARGET_H pixels rounding up (CSI 8;rows;cols t),
+# then become cmatrix.
+inner() {
+  old=$(stty -g)
+  stty raw -echo min 0 time 5
+  printf '\033[16t'
+  reply=$(dd bs=1 count=16 2>/dev/null)
+  stty "$old"
+  ch=$(printf '%s' "$reply" | sed -n 's/.*\[6;\([0-9]*\);\([0-9]*\)t.*/\1/p')
+  cw=$(printf '%s' "$reply" | sed -n 's/.*\[6;\([0-9]*\);\([0-9]*\)t.*/\2/p')
+  if [ -n "$cw" ] && [ "$cw" -gt 0 ] && [ -n "$MATRIX_TARGET_W" ]; then
+    cols=$(( (MATRIX_TARGET_W + cw - 1) / cw ))
+    rows=$(( (MATRIX_TARGET_H + ch - 1) / ch ))
+    printf '\033[8;%d;%dt' "$rows" "$cols"
+    # wait for the resize to land so cmatrix starts at the right size
+    i=0
+    while [ "$(stty size)" != "$rows $cols" ] && [ $i -lt 20 ]; do
+      sleep 0.05; i=$((i + 1))
+    done
+  fi
+  IFS=$NL
+  # shellcheck disable=SC2046
+  exec $(cmatrix_cmd)
+}
+
+# --- launch an xterm ---------------------------------------------------------
+xterm_args() {
+  # xterm's default disallowedWindowOps minus the two inner() needs:
+  # 8 (resize in characters) and 19 (which, in xterm 390 at least, is what
+  # gates the CSI 16 t cell-size report).  Everything else stays blocked.
+  printf '%s\n' -u8 -fa "$FONT" -fs "$FONT_SIZE" -bg "$BG" -fg "$COLOR_HEAD" \
+    -cr "$BG" +sb -b 0 -bw 0 -T matrix-saver -n matrix-saver \
+    -xrm "XTerm*color0: $BG" \
+    -xrm "XTerm*color2: $COLOR_DIM" \
+    -xrm "XTerm*color10: $COLOR_BRIGHT" \
+    -xrm "XTerm*color7: $COLOR_HEAD" \
+    -xrm "XTerm*color15: $COLOR_HEAD" \
+    -xrm 'XTerm*disallowedWindowOps: 1,2,3,4,5,6,7,9,11,13,14,18,20,21,GetSelection,SetSelection,SetWinLines,SetXprop' \
+    -xrm 'XTerm*cursorBlink: false' \
+    -xrm 'XTerm*pointerMode: 2'
+}
+
+check_deps() {
+  for c in cmatrix xterm xwininfo; do
+    command -v "$c" >/dev/null 2>&1 || die "'$c' not found; please install it"
+  done
+  if [ "$CHARSET" = japanese ] && command -v fc-list >/dev/null 2>&1 &&
+     [ -z "$(fc-list "$FONT" 2>/dev/null)" ]; then
+    echo "matrix-saver: font '$FONT' not found, falling back to ascii" >&2
+    CHARSET=ascii FONT=monospace
+  fi
+}
+
+run_into() {  # $1 = X window id
+  geom=$(xwininfo -id "$1" 2>/dev/null) || die "no such window: $1"
+  MATRIX_TARGET_W=$(printf '%s\n' "$geom" | awk '/Width:/{print $2}')
+  MATRIX_TARGET_H=$(printf '%s\n' "$geom" | awk '/Height:/{print $2}')
+  export MATRIX_TARGET_W MATRIX_TARGET_H
+  export_settings
+  # Start oversized (clipped by the parent) so there is no flash of an
+  # 80x24 box; inner() then trims it to the real size.
+  IFS=$NL
+  # shellcheck disable=SC2046
+  exec xterm -into "$1" -geometry "$((MATRIX_TARGET_W / 5))x$((MATRIX_TARGET_H / 8))+0+0" \
+    $(xterm_args) -e "$0" --inner
+}
+
+run_window() {  # $1 = extra xterm flag (e.g. -fullscreen) or empty
+  unset MATRIX_TARGET_W MATRIX_TARGET_H
+  export_settings
+  IFS=$NL
+  # In preview mode cmatrix -s quits on the first keystroke.
+  # shellcheck disable=SC2046
+  exec xterm ${1:+"$1"} $(xterm_args) -e "$0" --inner-preview
+}
+
+usage() { sed -n '2,/^# SPDX/{/SPDX/d;s/^# \{0,1\}//;p;}' "$0"; }
+
+# --- main -------------------------------------------------------------------
+case ${1-} in
+  --inner)
+    inner ;;
+  --inner-preview)
+    CMATRIX_ARGS="-s $CMATRIX_ARGS"; inner ;;
+  --tty)
+    IFS=$NL
+    # shellcheck disable=SC2046
+    exec $(cmatrix_cmd) ;;
+  -h|--help)
+    usage; exit 0 ;;
+  -V|--version)
+    echo "matrix-saver $VERSION"; exit 0 ;;
+esac
+
+win=${XSCREENSAVER_WINDOW-}
+mode=
+while [ $# -gt 0 ]; do
+  case $1 in
+    -window-id|--window-id) win=${2:?-window-id needs an id}; shift ;;
+    # Like vroot.h: "root" means xscreensaver's window when there is one.
+    -root|--root)
+      win=${XSCREENSAVER_WINDOW:-$(xwininfo -root | awk '/Window id:/{print $4}')} ;;
+    -window|--window) mode=window; win= ;;
+    -fullscreen|--fullscreen) mode=fullscreen; win= ;;
+    -speed|--speed) SPEED=${2:?-speed needs a value}; shift ;;
+    -font|--font) FONT=${2:?-font needs a name}; shift ;;
+    -font-size|--font-size) FONT_SIZE=${2:?-font-size needs a value}; shift ;;
+    -bold|--bold) BOLD=${2:?-bold needs yes, no or all}; shift ;;
+    -ascii|--ascii) CHARSET=ascii ;;
+    -japanese|--japanese) CHARSET=japanese ;;
+    # xscreensaver passes these to many hacks; accept and ignore them
+    -install|-noinstall|-visual|-fps|-no-fps) [ "$1" = -visual ] && shift ;;
+    *) usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+# Validate here: errors inside the xterm would just flash and vanish.
+case $SPEED in [0-9]|10) ;; *) die "speed must be 0..10, not '$SPEED'" ;; esac
+cmatrix_cmd >/dev/null || exit 1
+check_deps
+
+if [ -n "$win" ]; then
+  run_into "$win"
+elif [ "$mode" = fullscreen ]; then
+  run_window -fullscreen
+else
+  run_window ""
+fi

@@ -1,0 +1,21 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck libxml2-utils
+      - run: make check
+
+  smoke:
+    # Run the hack inside a virtual X server and check that it fills the window.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y cmatrix xterm x11-utils xvfb fonts-noto-cjk
+      - run: tests/smoke.sh

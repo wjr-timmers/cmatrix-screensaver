@@ -1,0 +1,27 @@
+! XScreenSaver lock dialog, Ubuntu-ish dark style
+xscreensaver-auth.default.Dialog.background:              #1E1E1E
+xscreensaver-auth.default.Dialog.foreground:              #FFFFFF
+xscreensaver-auth.default.Dialog.borderColor:             #1E1E1E
+xscreensaver-auth.default.Dialog.borderWidth:             0
+xscreensaver-auth.default.Dialog.internalPadding:         32
+xscreensaver-auth.default.Dialog.logo.background:         #1E1E1E
+xscreensaver-auth.default.Dialog.text.background:         #2B2B2B
+xscreensaver-auth.default.Dialog.text.foreground:         #FFFFFF
+xscreensaver-auth.default.Dialog.error.foreground:        #FF6B6B
+xscreensaver-auth.default.Dialog.button.background:       #2B2B2B
+xscreensaver-auth.default.Dialog.button.foreground:       #FFFFFF
+xscreensaver-auth.default.Dialog.topShadowColor:          #1E1E1E
+xscreensaver-auth.default.Dialog.bottomShadowColor:       #1E1E1E
+xscreensaver-auth.default.Dialog.shadowWidth:             0
+xscreensaver-auth.default.Dialog.thermometer.foreground:  #E95420
+xscreensaver-auth.default.Dialog.thermometer.background:  #2B2B2B
+xscreensaver-auth.default.Dialog.thermometer.width:       4
+xscreensaver-auth.default.Dialog.headingFont:  Ubuntu Sans Bold 14, Ubuntu Bold 14
+xscreensaver-auth.default.Dialog.bodyFont:     Ubuntu Sans 11, Ubuntu 11
+xscreensaver-auth.default.Dialog.labelFont:    Ubuntu Sans 11, Ubuntu 11
+xscreensaver-auth.default.Dialog.unameFont:    Ubuntu Sans Bold 13, Ubuntu Bold 13
+xscreensaver-auth.default.Dialog.buttonFont:   Ubuntu Sans 11, Ubuntu 11
+xscreensaver-auth.default.Dialog.dateFont:     Ubuntu Sans 9, Ubuntu 9
+xscreensaver-auth.default.*.newLoginCommand:
+xscreensaver-auth.default.Dialog.logo.width:   1
+xscreensaver-auth.default.Dialog.logo.height:  1
